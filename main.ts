@@ -7,6 +7,9 @@ namespace SpriteKind {
     export const redpotion = SpriteKind.create()
     export const bluepotion = SpriteKind.create()
 }
+namespace ConnectionKind {
+    export const Door3 = ConnectionKind.create()
+}
 sprites.onOverlap(SpriteKind.Player, SpriteKind.bluepotion, function (sprite, otherSprite) {
     sprites.destroy(otherSprite, effects.rings, 500)
     heroMagic.value += 90
@@ -87,6 +90,14 @@ controller.B.onEvent(ControllerButtonEvent.Pressed, function () {
     true
     )
 })
+function createLevel () {
+    MapLv1 = tiles.createMap(tilemap`level4`)
+    MapLv2 = tiles.createMap(tilemap`level22`)
+    MapLv3 = tiles.createMap(tilemap`level23`)
+    tiles.loadMap(MapLv1)
+    tiles.connectMapById(MapLv1, MapLv2, ConnectionKind.Door1)
+    tiles.connectMapById(MapLv2, MapLv3, ConnectionKind.Door2)
+}
 controller.A.onEvent(ControllerButtonEvent.Pressed, function () {
     if (Atkstat == 1 && characterAnimations.matchesRule(MyHero, characterAnimations.rule(Predicate.MovingUp))) {
         HeroStrike = sprites.createProjectileFromSprite(img`
@@ -534,6 +545,11 @@ controller.A.onEvent(ControllerButtonEvent.Pressed, function () {
         heroMagic.value += -5
     }
 })
+tiles.onMapLoaded(function (tilemap2) {
+    tiles.coverAllTiles(tiles.util.door0, sprites.dungeon.doorOpenNorth)
+    tiles.coverAllTiles(tiles.util.arrow1, sprites.builtin.forestTiles11)
+    tiles.coverAllTiles(assets.tile`myTile15`, sprites.dungeon.darkGroundSouthEast1)
+})
 function Herofunction () {
     MyHero = sprites.create(img`
         . . . . . . f f f f . . . . . . 
@@ -553,7 +569,6 @@ function Herofunction () {
         . . . . . f f f f f f . . . . . 
         . . . . . f f . . f f . . . . . 
         `, SpriteKind.Player)
-    MyHero.x += -15
     heroHealth = statusbars.create(5, 40, StatusBarKind.Health)
     heroHealth.setBarBorder(1, 2)
     heroMagic = statusbars.create(5, 40, StatusBarKind.Magic)
@@ -568,6 +583,7 @@ function Herofunction () {
     heroHealth.attachToSprite(MyHero, 3, -10)
     heroMagic.attachToSprite(MyHero, 9, -10)
     heroMoving()
+    tiles.placeOnRandomTile(MyHero, assets.tile`myTile15`)
 }
 statusbars.onZero(StatusBarKind.EnemyHealth, function (status) {
     status.spriteAttachedTo().destroy()
@@ -593,11 +609,34 @@ function fn_BluePotion () {
             . . . . . . . . . . . . . . . . 
             `, SpriteKind.bluepotion)
         tiles.placeOnTile(BluePotion, value)
-        tiles.setTileAt(value, sprites.castle.tilePath5)
+        tiles.setTileAt(value, sprites.dungeon.darkGroundCenter)
     }
 }
 statusbars.onZero(StatusBarKind.Magic, function (status) {
     Atkstat = 0
+})
+scene.onOverlapTile(SpriteKind.Player, tiles.util.arrow1, function (sprite, location) {
+    if (tiles.getLoadedMap() == MapLv1) {
+        tiles.loadConnectedMap(ConnectionKind.Door1)
+        tiles.placeOnRandomTile(MyHero, tiles.util.door0)
+    } else if (tiles.getLoadedMap() == MapLv2) {
+        tiles.loadConnectedMap(ConnectionKind.Door2)
+        tiles.placeOnRandomTile(MyHero, tiles.util.door0)
+    } else {
+        tiles.placeOnRandomTile(MyHero, tiles.util.door0)
+    }
+    for (let value of sprites.allOfKind(SpriteKind.Enemy)) {
+        sprites.destroy(value)
+    }
+    for (let value of sprites.allOfKind(SpriteKind.redpotion)) {
+        sprites.destroy(value)
+    }
+    for (let value of sprites.allOfKind(SpriteKind.bluepotion)) {
+        sprites.destroy(value)
+    }
+    Enemyfunction()
+    fn_BluePotion()
+    fn_RedPotion()
 })
 statusbars.onZero(StatusBarKind.Health, function (status) {
     game.over(false)
@@ -738,11 +777,11 @@ function Enemyfunction () {
             // ถ้าเราเอา tile นี้ตั้งไว้จะ Loop monster  spawn ไม่ได้
             // 
             // ต้องไม่ตั้ง Tile มาทับ Marker ของ Function
-            tiles.setTileAt(value, sprites.castle.tilePath5)
-            MyEnemy.follow(MyHero, randint(5, 30))
+            tiles.setTileAt(value, sprites.dungeon.darkGroundCenter)
+            MyEnemy.follow(MyHero, randint(5, 10))
         }
     } else {
-        MonsterCount += -1
+    	
     }
 }
 function heroMoving () {
@@ -1142,7 +1181,7 @@ function fn_RedPotion () {
             . . . . . . . . . . . . . . . . 
             `, SpriteKind.redpotion)
         tiles.placeOnTile(RDPotion, value)
-        tiles.setTileAt(value, sprites.castle.tilePath5)
+        tiles.setTileAt(value, sprites.dungeon.darkGroundCenter)
     }
 }
 sprites.onOverlap(SpriteKind.Player, SpriteKind.redpotion, function (sprite, otherSprite) {
@@ -1150,7 +1189,7 @@ sprites.onOverlap(SpriteKind.Player, SpriteKind.redpotion, function (sprite, oth
     heroHealth.value += 20
 })
 sprites.onOverlap(SpriteKind.Projectile, SpriteKind.Enemy, function (sprite, otherSprite) {
-    sprites.destroy(sprite)
+    sprites.destroy(sprite, effects.spray, 500)
     statusbars.getStatusBarAttachedTo(StatusBarKind.EnemyHealth, otherSprite).value += -20
 })
 sprites.onOverlap(SpriteKind.Player, SpriteKind.Enemy, function (sprite, otherSprite) {
@@ -1164,21 +1203,25 @@ let BluePotion: Sprite = null
 let heroHealth: StatusBarSprite = null
 let HeroStrike: Sprite = null
 let Atkstat = 0
+let MapLv3: tiles.WorldMap = null
+let MapLv2: tiles.WorldMap = null
+let MapLv1: tiles.WorldMap = null
 let MyHero: Sprite = null
 let heroMagic: StatusBarSprite = null
 let MonsterCount = 0
-tiles.setCurrentTilemap(tilemap`level4`)
+MonsterCount = 1
+createLevel()
 Herofunction()
 fn_RedPotion()
 fn_BluePotion()
-MonsterCount = 1
+Enemyfunction()
 game.onUpdate(function () {
     if (heroMagic.value >= 10) {
         Atkstat = 1
     }
 })
 game.onUpdateInterval(2000, function () {
-    Enemyfunction()
+	
 })
 game.onUpdateInterval(1000, function () {
     if (heroHealth.value <= 100) {
